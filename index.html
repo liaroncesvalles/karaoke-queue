@@ -109,6 +109,10 @@
   .stage.idle #player { bottom: 0 !important; }
   .stage.idle { cursor: none; }
 
+  .update-bar { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; background: var(--panel-2); border-bottom: 2px solid var(--accent); font-size: 14px; }
+  .update-bar span { color: var(--muted); }
+  .update-bar.hidden { display: none; }
+
   /* song suggestions */
   .suggest-wrap { position: relative; }
   .suggest { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
@@ -120,6 +124,7 @@
 </style>
 </head>
 <body>
+<div class="update-bar hidden" id="updateBar">A new version of the site is ready. <button class="small primary" onclick="location.reload()">Refresh</button> <span>(your queue is kept)</span></div>
 <header>
   <h1>🎤 Karaoke <span>Queue</span></h1>
   <button class="small" id="settingsBtn">⚙ Settings</button>
@@ -547,6 +552,25 @@ $('saveKey').onclick = () => {
   apiKey = $('apiKey').value.trim(); store.set('kq_apikey', apiKey);
   updateSearchHint(); $('settings').classList.add('hidden');
 };
+
+// ---------- Auto-update ----------
+// Browsers can keep an old copy of this page for a while. Check for a newer version now and then:
+// reload straight away if nothing is playing, otherwise show a refresh banner (the queue is kept either way).
+const APP_VERSION = '2026-11-21-3';
+async function checkForUpdate() {
+  try {
+    const r = await fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' });
+    const m = (await r.text()).match(/APP_VERSION = '([^']+)'/);
+    if (!m || m[1] === APP_VERSION) return;
+    if (!current || isPaused) location.reload();
+    else $('updateBar').classList.remove('hidden');
+  } catch {}
+}
+if (location.protocol.startsWith('http')) {
+  checkForUpdate();
+  setInterval(checkForUpdate, 2 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
+}
 
 updateSearchHint();
 render();
