@@ -89,19 +89,54 @@ def is_embeddable(video_id):
         return True  # couldn't check; keep it and let the player handle it
 
 
+NOISE = re.compile(r"\b(karaoke|minus ?one|instrumental|lyrics?|version|videoke|with)\b", re.I)
+
+
+def _suggest_raw(q):
+    url = "https://suggestqueries.google.com/complete/search?" + urllib.parse.urlencode(
+        {"client": "firefox", "ds": "yt", "q": q})
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=HEADERS), timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8", "replace"))
+        return data[1] if len(data) > 1 else []
+    except Exception:
+        return []
+
+
+def youtube_suggest(query, limit=8):
+    """Song suggestions while typing, from YouTube's autocomplete.
+    Mixes normal suggestions (full song/artist names) with karaoke-biased ones."""
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        plain, kara = pool.map(_suggest_raw, [query, f"{query} karaoke"])
+    out, seen = [], {query.lower().strip()}
+    for s in plain[:5] + kara:
+        clean = re.sub(r"\s+", " ", NOISE.sub(" ", s)).strip()
+        # skip leftovers that are just the typed words plus one filler word
+        if len(clean) <= len(query) + 2 or clean.lower() in seen:
+            continue
+        seen.add(clean.lower())
+        out.append(clean)
+        if len(out) >= limit:
+            break
+    return out
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=HERE, **kwargs)
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path == "/api/search":
+        if parsed.path in ("/api/search", "/api/suggest"):
             q = urllib.parse.parse_qs(parsed.query).get("q", [""])[0].strip()
             try:
-                results = youtube_search(q) if q else []
-                if q and not results:  # YouTube occasionally returns an empty page; try once more
-                    results = youtube_search(q)
-                body = {"results": results}
+                if parsed.path == "/api/suggest":
+                    body = {"suggestions": youtube_suggest(q) if q else []}
+                else:
+                    results = youtube_search(q) if q else []
+                    if q and not results:  # YouTube occasionally returns an empty page; try once more
+                        results = youtube_search(q)
+                    body = {"results": results}
                 status = 200
             except Exception as e:  # network error, YouTube layout change, etc.
                 body, status = {"error": str(e)}, 502
