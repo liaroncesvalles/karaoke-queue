@@ -127,6 +127,15 @@
   .fs-side .results { max-height: 38vh; }
   .fs-side .queue { max-height: 30vh; overflow-y: auto; }
   .fs-side .result img { width: 80px; height: 45px; }
+  /* "Up next" pop-up during the last 10 seconds of a song (top-right of the video, never over the side panel) */
+  .next-toast { position: absolute; top: 16px; right: calc(var(--side-w, 0px) + 16px); z-index: 6; display: flex; align-items: center; gap: 12px; max-width: min(420px, calc(100% - var(--side-w, 0px) - 32px)); padding: 10px 14px 10px 10px; background: rgba(18,18,18,.94); border: 1px solid var(--accent); border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.6); opacity: 0; transform: translateY(-12px); pointer-events: none; transition: opacity .35s, transform .35s; }
+  .next-toast.show { opacity: 1; transform: none; }
+  .next-toast img { width: 96px; height: 54px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #000; }
+  .next-toast.no-next img { display: none; }
+  .next-toast .nt-text { min-width: 0; }
+  .next-toast .nt-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); font-weight: 600; }
+  .next-toast .nt-title { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .next-toast .nt-singer { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .kbd { display: inline-block; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; font-size: 11px; color: var(--muted); margin-left: 4px; }
 
   .update-bar { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; background: var(--panel-2); border-bottom: 2px solid var(--accent); font-size: 14px; }
@@ -169,6 +178,7 @@
           </div>
         </div>
         <div class="mini-controls">
+          <button id="miniPrev" title="Previous song (P)">⏮</button>
           <button id="miniPause" title="Pause / Play (Space)">⏸</button>
           <button id="miniReplay" title="Replay (R)">↺</button>
           <button id="miniNext" class="primary" title="Next singer (N)">⏭</button>
@@ -177,6 +187,14 @@
         </div>
       </div>
       <div class="fs-side" id="fsSide"></div>
+      <div class="next-toast" id="nextToast">
+        <img id="ntThumb" alt="">
+        <div class="nt-text">
+          <div class="nt-label" id="ntLabel">Up next</div>
+          <div class="nt-title" id="ntTitle"></div>
+          <div class="nt-singer" id="ntSinger"></div>
+        </div>
+      </div>
     </div>
 
     <div class="now">
@@ -186,6 +204,7 @@
         <div class="now-singer" id="nowSinger"></div>
       </div>
       <div class="controls">
+        <button class="ctrl" id="prevBtn" disabled title="Previous song (P)">⏮ Previous</button>
         <button class="ctrl" id="pauseBtn" disabled>⏸ Pause</button>
         <button class="ctrl" id="replayBtn" disabled>↺ Replay</button>
         <button class="ctrl primary" id="nextBtn" disabled>⏭ Next</button>
@@ -201,6 +220,7 @@
       <div class="tabs">
         <button class="small active" data-tab="search">Search</button>
         <button class="small" data-tab="link">Paste link</button>
+        <button class="small" data-tab="history">⟲ Sung before</button>
       </div>
 
       <label for="singer">Singer name (optional)</label>
@@ -223,6 +243,11 @@
         <label for="title">Song title (optional)</label>
         <input id="title" placeholder="Filled in automatically if left blank" autocomplete="off">
         <div class="row"><button class="primary" id="addLinkBtn">Add to queue</button></div>
+      </div>
+      <div id="tab-history" class="hidden">
+        <div class="hint" id="historyHint"></div>
+        <input id="historyFilter" placeholder="Filter past songs…" autocomplete="off" style="margin-top:8px">
+        <div class="results" id="historyList"></div>
       </div>
       <div class="error" id="err"></div>
     </div>
@@ -253,10 +278,20 @@ const store = {
 // State: current = song on stage (or null), queue = songs waiting after it
 let current = store.get('kq_current', null);
 let queue = store.get('kq_queue', []);
+let played = store.get('kq_played', []);     // songs already sung/skipped, for the Previous button
+let history = store.get('kq_history', []);   // every song ever added, newest first, for "sing it again"
 let apiKey = store.get('kq_apikey', '');
 let player = null, playerReady = false, isPaused = false;
 
-function save() { store.set('kq_current', current); store.set('kq_queue', queue); }
+function save() { store.set('kq_current', current); store.set('kq_queue', queue); store.set('kq_played', played); }
+
+function addToHistory(song) {
+  const old = history.find(h => h.id === song.id);
+  history = history.filter(h => h.id !== song.id);
+  history.unshift({ id: song.id, title: song.title, singer: song.singer, last: Date.now(), count: (old ? old.count : 0) + 1 });
+  history = history.slice(0, 100);
+  store.set('kq_history', history);
+}
 
 function parseVideoId(input) {
   input = (input || '').trim();
@@ -285,6 +320,7 @@ function render() {
   $('miniPause').textContent = isPaused ? '▶' : '⏸';
   $('miniPause').disabled = $('miniReplay').disabled = !current;
   $('miniNext').disabled = !current && queue.length === 0;
+  $('prevBtn').disabled = $('miniPrev').disabled = !played.length;
   $('upNext').innerHTML = queue.length
     ? `Up next: <b>${esc(queue[0].singer)}</b> — ${esc(queue[0].title)}`
     : 'Up next: nobody yet — add a song!';
@@ -322,22 +358,58 @@ $('queue').addEventListener('click', (e) => {
 
 // ---------- Queue logic ----------
 function addSong(song) {
+  addToHistory(song);
   if (!current) { current = song; save(); loadCurrent(); }
   else queue.push(song);      // goes after the song being sung (and anyone already waiting)
   save(); render();
 }
 
 function next() {
+  if (current) { played.push(current); played = played.slice(-30); }
   current = queue.shift() || null;
   isPaused = false;
+  store.set('kq_pos', null);
   save(); loadCurrent(); render();
 }
 
-function loadCurrent() {
+// Go back to the song before this one; the current song goes back to the front of the queue.
+function previous() {
+  if (!played.length) return;
+  if (current) queue.unshift(current);
+  current = played.pop();
+  isPaused = false;
+  store.set('kq_pos', null);
+  save(); loadCurrent(); render();
+}
+
+function loadCurrent(startSeconds = 0) {
   if (!playerReady) return;
-  if (current) player.loadVideoById(current.id);
+  hideToast();
+  if (current) player.loadVideoById({ videoId: current.id, startSeconds });
   else player.stopVideo();
 }
+
+// ---------- "Up next" pop-up in the last 10 seconds ----------
+function hideToast() { $('nextToast').classList.remove('show'); }
+function updateToast(t, d) {
+  const left = Math.ceil(d - t);
+  if (!current || !d || isPaused || left > 10 || left <= 0) return hideToast();
+  const nx = queue[0];
+  $('nextToast').classList.toggle('no-next', !nx);
+  $('ntLabel').textContent = nx ? `Up next in ${left}s` : `Last song · ends in ${left}s`;
+  $('ntTitle').textContent = nx ? nx.title : 'The queue is empty';
+  $('ntSinger').textContent = nx ? '🎙 ' + nx.singer : 'Add a song to keep the party going 🎤';
+  if (nx) { const src = `https://i.ytimg.com/vi/${nx.id}/mqdefault.jpg`; if ($('ntThumb').src !== src) $('ntThumb').src = src; }
+  $('nextToast').classList.add('show');
+}
+
+// Remember where we are in the song every second, so a reload or reopened tab picks up at the same spot.
+setInterval(() => {
+  if (!playerReady || !current || !player.getCurrentTime) return;
+  const t = player.getCurrentTime(), d = player.getDuration();
+  if (t > 0) store.set('kq_pos', { id: current.id, t: Math.floor(t) });
+  updateToast(t, d);
+}, 1000);
 
 // ---------- YouTube player ----------
 const tag = document.createElement('script');
@@ -348,7 +420,12 @@ window.onYouTubeIframeAPIReady = () => {
   player = new YT.Player('player', {
     playerVars: { autoplay: 1, rel: 0, modestbranding: 1, playsinline: 1 },
     events: {
-      onReady: () => { playerReady = true; if (current) player.loadVideoById(current.id); },
+      onReady: () => {
+        playerReady = true;
+        if (!current) return;
+        const pos = store.get('kq_pos', null);   // resume where we left off (reload / reopened tab)
+        loadCurrent(pos && pos.id === current.id ? pos.t : 0);
+      },
       onStateChange: (e) => {
         if (e.data === YT.PlayerState.ENDED) next();          // auto-advance to the next singer
         if (e.data === YT.PlayerState.PAUSED) { isPaused = true; render(); }
@@ -378,6 +455,7 @@ $('pauseBtn').onclick = () => {
 };
 $('replayBtn').onclick = () => { if (playerReady && current) { player.seekTo(0, true); player.playVideo(); } };
 $('nextBtn').onclick = () => { setErr(''); next(); };
+$('prevBtn').onclick = () => { setErr(''); previous(); };
 $('clearBtn').onclick = () => { if (queue.length && confirm('Remove everyone waiting in the queue?')) { queue = []; save(); render(); } };
 
 // ---------- Full screen ----------
@@ -400,6 +478,7 @@ $('exitFull').onclick = toggleFull;
 $('miniPause').onclick = () => $('pauseBtn').click();
 $('miniReplay').onclick = () => $('replayBtn').click();
 $('miniNext').onclick = () => $('nextBtn').click();
+$('miniPrev').onclick = () => $('prevBtn').click();
 
 // In full screen, the "Add a song" + "Queue" panels move into a Spotlight-style side panel on the right.
 // The video shrinks to the space left of it, so the panel never covers the lyrics.
@@ -425,8 +504,9 @@ function layoutFull() {
   // the bar's height can change once the video narrows, so measure again after the width change
   requestAnimationFrame(() => stage.style.setProperty('--bar-h', $('miniBar').offsetHeight + 'px'));
   $('miniSearch').classList.toggle('on', open);
+  if (!open) sideHover = false; // a hidden panel can't fire mouseleave
 }
-function onFullChange() { layoutFull(); }
+function onFullChange() { layoutFull(); scheduleSideHide(); }
 document.addEventListener('fullscreenchange', onFullChange);
 document.addEventListener('webkitfullscreenchange', onFullChange);
 new ResizeObserver(() => { if (isFull()) layoutFull(); }).observe(stage);
@@ -437,8 +517,29 @@ function toggleSide(forceOpen) {
   else stage.classList.toggle('side-closed');
   layoutFull();
   if (!stage.classList.contains('side-closed')) setTimeout(() => $('query').focus(), 50);
+  scheduleSideHide();
 }
 $('miniSearch').onclick = () => toggleSide();
+
+// The side panel tucks itself away after 5 seconds of no activity in it, giving the video the full width.
+// Typing, tapping, scrolling or new results reset the timer; it stays while the mouse is over it.
+let sideTimer = null, sideHover = false;
+function sideOpen() { return isFull() && !stage.classList.contains('side-closed'); }
+function scheduleSideHide() {
+  clearTimeout(sideTimer);
+  if (!sideOpen() || sideHover) return;
+  sideTimer = setTimeout(() => {
+    if (!sideOpen() || sideHover) return;
+    stage.classList.add('side-closed');
+    $('suggest').classList.add('hidden');
+    if (document.activeElement && $('fsSide').contains(document.activeElement)) document.activeElement.blur();
+    layoutFull();
+  }, 5000);
+}
+$('fsSide').addEventListener('mouseenter', () => { sideHover = true; clearTimeout(sideTimer); });
+$('fsSide').addEventListener('mouseleave', () => { sideHover = false; scheduleSideHide(); });
+['input', 'keydown', 'pointerdown', 'scroll', 'focusin'].forEach(ev => $('fsSide').addEventListener(ev, scheduleSideHide, { capture: true, passive: true }));
+new MutationObserver(scheduleSideHide).observe($('fsSide'), { childList: true, subtree: true });
 
 // keyboard shortcuts (when not typing): space = pause, N = next, R = replay, F = full screen,
 // "/" or Cmd/Ctrl+K = jump to search (like Spotlight)
@@ -454,6 +555,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && stage.classList.contains('fake-full')) { stage.classList.remove('fake-full'); layoutFull(); }
   if (e.code === 'Space') { e.preventDefault(); $('pauseBtn').click(); }
   if (e.key === 'n' || e.key === 'N') $('nextBtn').click();
+  if (e.key === 'p' || e.key === 'P') $('prevBtn').click();
   if (e.key === 'r' || e.key === 'R') $('replayBtn').click();
 });
 
@@ -463,11 +565,45 @@ function getSinger() {
   return $('singer').value.trim() || 'Guest';
 }
 
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
-  $('tab-search').classList.toggle('hidden', b.dataset.tab !== 'search');
-  $('tab-link').classList.toggle('hidden', b.dataset.tab !== 'link');
+function showTab(name) {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
+  ['search', 'link', 'history'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== name));
+  if (name === 'history') renderHistory();
   setErr('');
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ---------- Sung before (history from past sessions) ----------
+function timeAgo(ms) {
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return days + ' days ago';
+  return new Date(ms).toLocaleDateString();
+}
+function renderHistory() {
+  const f = $('historyFilter').value.trim().toLowerCase();
+  const list = history.filter(h => !f || (h.title + ' ' + h.singer).toLowerCase().includes(f));
+  $('historyHint').textContent = history.length
+    ? 'Songs added in past sessions. Tap one to queue it again.'
+    : 'Songs you add will show up here next time, so you can sing them again.';
+  $('historyList').innerHTML = list.map(h => `
+    <div class="result" data-id="${esc(h.id)}">
+      <img src="https://i.ytimg.com/vi/${esc(h.id)}/mqdefault.jpg" alt="" loading="lazy">
+      <div class="t">${esc(h.title)}<div class="c">🎙 ${esc(h.singer)} · ${timeAgo(h.last)}${h.count > 1 ? ' · ' + h.count + '×' : ''}</div></div>
+      <button class="small primary">+ Queue</button>
+    </div>`).join('');
+}
+$('historyFilter').addEventListener('input', renderHistory);
+$('historyList').addEventListener('click', (e) => {
+  const row = e.target.closest('.result'); if (!row) return;
+  const b = row.querySelector('button'); if (b.disabled) return;
+  const h = history.find(x => x.id === row.dataset.id); if (!h) return;
+  // use the name typed now, otherwise whoever sang it last time
+  const singer = $('singer').value.trim() || h.singer;
+  addSong({ id: h.id, title: h.title, singer });
+  $('singer').value = '';
+  b.textContent = '✓ Added'; b.disabled = true;
 });
 
 $('addLinkBtn').onclick = async () => {
@@ -618,13 +754,14 @@ $('saveKey').onclick = () => {
 // ---------- Auto-update ----------
 // Browsers can keep an old copy of this page for a while. Check for a newer version now and then:
 // reload straight away if nothing is playing, otherwise show a refresh banner (the queue is kept either way).
-const APP_VERSION = '2026-11-21-5';
+const APP_VERSION = '2026-11-21-6';
 async function checkForUpdate() {
   try {
     const r = await fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' });
     const m = (await r.text()).match(/APP_VERSION = '([^']+)'/);
     if (!m || m[1] === APP_VERSION) return;
-    if (!current || isPaused) location.reload();
+    // only refresh on its own when the stage is empty; never interrupt a song, playing or paused
+    if (!current) location.reload();
     else $('updateBar').classList.remove('hidden');
   } catch {}
 }
@@ -636,6 +773,11 @@ if (location.protocol.startsWith('http')) {
 
 updateSearchHint();
 render();
+// New session (nothing on stage, empty queue) and songs from before? Open "Sung before" to suggest them.
+if (!current && !queue.length && history.length) {
+  showTab('history');
+  $('historyHint').innerHTML = '<b style="color:var(--accent)">Welcome back!</b> Here are songs from your past sessions. Tap one to queue it again.';
+}
 </script>
 </body>
 </html>
