@@ -92,23 +92,42 @@
 
   /* full screen stage */
   /* mini player bar shown only in full screen */
-  .stage-overlay { display: none; position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 20px; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: rgba(18,18,18,.92); border-top: 2px solid var(--accent); transition: opacity .3s; }
-  .stage-overlay .ov-info { min-width: 0; flex: 1 1 260px; }
-  .stage-overlay .ov-now { font-size: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stage-overlay { display: none; position: absolute; left: 0; right: var(--side-w, 0px); bottom: 0; padding: 12px 18px; gap: 10px 14px; flex-wrap: wrap; align-items: center; justify-content: space-between; background: rgba(18,18,18,.95); border-top: 2px solid var(--accent); }
+  .stage-overlay .ov-info { min-width: 0; flex: 1 1 200px; }
+  .stage-overlay .ov-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); font-weight: 600; }
+  .stage-overlay .ov-now { font-size: 19px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .stage-overlay .ov-now span { color: var(--accent); }
-  .stage-overlay .ov-next { color: var(--muted); font-size: 14px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* "Up next" preview card */
+  .ov-nextcard { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 1 300px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px 6px 6px; }
+  .ov-nextcard img { width: 72px; height: 40px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #000; }
+  .ov-nextcard .nc-text { min-width: 0; }
+  .ov-nextcard .nc-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-weight: 600; }
+  .ov-nextcard .nc-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ov-nextcard .nc-singer { font-size: 12px; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ov-nextcard.empty img { display: none; }
   .mini-controls { display: flex; gap: 8px; flex-shrink: 0; }
-  .mini-controls button { width: 52px; height: 52px; padding: 0; border-radius: 50%; font-size: 20px; display: grid; place-items: center; }
-  .mini-controls button.primary { width: 60px; height: 60px; font-size: 22px; }
+  .mini-controls button { width: 50px; height: 50px; padding: 0; border-radius: 50%; font-size: 19px; display: grid; place-items: center; }
+  .mini-controls button.primary { width: 58px; height: 58px; font-size: 21px; }
+  .mini-controls button.on { border-color: var(--accent); color: var(--accent); }
   .stage:fullscreen, .stage.fake-full { border-radius: 0; aspect-ratio: auto; }
   .stage.fake-full { position: fixed; inset: 0; z-index: 1000; }
   .stage:fullscreen .stage-overlay, .stage.fake-full .stage-overlay { display: flex; }
-  /* the video iframe won't stretch between top/bottom, so give it an explicit height above the bar */
-  .stage:fullscreen #player, .stage.fake-full #player { height: calc(100% - var(--bar-h, 92px)); }
-  /* when nobody touches anything for a few seconds, hide the bar and let the video use the full screen */
-  .stage.idle .stage-overlay { opacity: 0; pointer-events: none; }
-  .stage.idle #player { height: 100% !important; }
-  .stage.idle { cursor: none; }
+  /* video sits left of the side panel and above the bar; it never goes under either */
+  .stage:fullscreen #player, .stage.fake-full #player { width: calc(100% - var(--side-w, 0px)); height: calc(100% - var(--bar-h, 92px)); }
+  .stage:fullscreen .empty-stage, .stage.fake-full .empty-stage { right: var(--side-w, 0px); bottom: var(--bar-h, 92px); }
+
+  /* Spotlight-style search + queue panel on the right in full screen */
+  .fs-side { display: none; position: absolute; top: 0; right: 0; bottom: 0; overflow-y: auto; z-index: 5; padding: 16px; background: rgba(14,14,14,.97); border-left: 1px solid var(--line); }
+  .stage:fullscreen .fs-side, .stage.fake-full .fs-side { display: block; }
+  .stage.side-closed .fs-side { display: none; }
+  .fs-side .side { gap: 14px; }
+  .fs-side .panel { background: rgba(40,40,40,.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 16px; padding: 14px; }
+  .fs-side #settings { display: none !important; }
+  .fs-side #query { font-size: 17px; padding: 12px 14px 12px 40px; border-radius: 12px; background: rgba(0,0,0,.5) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23a6a6a6' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='8' cy='8' r='6'/%3E%3Cpath d='m13 13 4 4'/%3E%3C/svg%3E") no-repeat 13px center; }
+  .fs-side .results { max-height: 38vh; }
+  .fs-side .queue { max-height: 30vh; overflow-y: auto; }
+  .fs-side .result img { width: 80px; height: 45px; }
+  .kbd { display: inline-block; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; font-size: 11px; color: var(--muted); margin-left: 4px; }
 
   .update-bar { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; background: var(--panel-2); border-bottom: 2px solid var(--accent); font-size: 14px; }
   .update-bar span { color: var(--muted); }
@@ -138,16 +157,26 @@
       <div class="empty-stage" id="emptyStage"><div><b>Stage is open!</b>Add a song on the right to start singing.</div></div>
       <div class="stage-overlay" id="miniBar">
         <div class="ov-info">
+          <div class="ov-label">Now singing</div>
           <div class="ov-now" id="ovNow"></div>
-          <div class="ov-next" id="ovNext"></div>
+        </div>
+        <div class="ov-nextcard" id="ovNextCard">
+          <img id="ncThumb" alt="">
+          <div class="nc-text">
+            <div class="nc-label">Up next</div>
+            <div class="nc-title" id="ncTitle"></div>
+            <div class="nc-singer" id="ncSinger"></div>
+          </div>
         </div>
         <div class="mini-controls">
-          <button id="miniPause" title="Pause / Play">⏸</button>
-          <button id="miniReplay" title="Replay">↺</button>
-          <button id="miniNext" class="primary" title="Next singer">⏭</button>
-          <button id="exitFull" title="Exit full screen">✕</button>
+          <button id="miniPause" title="Pause / Play (Space)">⏸</button>
+          <button id="miniReplay" title="Replay (R)">↺</button>
+          <button id="miniNext" class="primary" title="Next singer (N)">⏭</button>
+          <button id="miniSearch" class="on" title="Show / hide search &amp; queue (/)">🔍</button>
+          <button id="exitFull" title="Exit full screen (F)">✕</button>
         </div>
       </div>
+      <div class="fs-side" id="fsSide"></div>
     </div>
 
     <div class="now">
@@ -260,8 +289,13 @@ function render() {
     ? `Up next: <b>${esc(queue[0].singer)}</b> — ${esc(queue[0].title)}`
     : 'Up next: nobody yet — add a song!';
   $('count').textContent = queue.length;
-  $('ovNow').innerHTML = current ? `🎙 <span>${esc(current.singer)}</span> — ${esc(current.title)}` : '';
-  $('ovNext').textContent = queue.length ? `Up next: ${queue[0].singer} — ${queue[0].title}` : 'Up next: nobody yet';
+  $('ovNow').innerHTML = current ? `🎙 <span>${esc(current.singer)}</span> — ${esc(current.title)}` : 'Nobody yet — add a song';
+  // "Up next" preview card with the next song's thumbnail
+  const nx = queue[0];
+  $('ovNextCard').classList.toggle('empty', !nx);
+  $('ncTitle').textContent = nx ? nx.title : 'Nobody yet';
+  $('ncSinger').textContent = nx ? '🎙 ' + nx.singer : 'Add a song →';
+  if (nx) { const src = `https://i.ytimg.com/vi/${nx.id}/mqdefault.jpg`; if ($('ncThumb').src !== src) $('ncThumb').src = src; }
 
   const ul = $('queue');
   if (!queue.length) { ul.innerHTML = '<li class="q-empty">Queue is empty</li>'; return; }
@@ -367,30 +401,57 @@ $('miniPause').onclick = () => $('pauseBtn').click();
 $('miniReplay').onclick = () => $('replayBtn').click();
 $('miniNext').onclick = () => $('nextBtn').click();
 
-// Hide the mini player after 4s without mouse/touch while in full screen; any movement brings it back.
-let idleTimer = null;
-function wake() {
-  stage.classList.remove('idle');
-  clearTimeout(idleTimer);
-  if (isFull()) idleTimer = setTimeout(() => { if (isFull() && !isPaused) stage.classList.add('idle'); }, 4000);
+// In full screen, the "Add a song" + "Queue" panels move into a Spotlight-style side panel on the right.
+// The video shrinks to the space left of it, so the panel never covers the lyrics.
+// On narrow screens (phones) there is no room beside the video, so the panel starts hidden and opens over it.
+const mainEl = document.querySelector('main');
+const asideEl = document.querySelector('aside.side');
+let wasFull = false;
+function layoutFull() {
+  const full = isFull();
+  if (full && !wasFull && stage.clientWidth < 760) stage.classList.add('side-closed');
+  if (!full) stage.classList.remove('side-closed');
+  wasFull = full;
+  if (full && asideEl.parentElement !== $('fsSide')) $('fsSide').appendChild(asideEl);
+  if (!full && asideEl.parentElement !== mainEl) mainEl.appendChild(asideEl);
+
+  const open = full && !stage.classList.contains('side-closed');
+  const w = stage.clientWidth, narrow = w < 760;
+  const sideW = open ? Math.max(340, Math.min(420, Math.round(w * 0.3))) : 0;
+  const barH = $('miniBar').offsetHeight;
+  stage.style.setProperty('--side-w', (open && !narrow ? sideW : 0) + 'px');   // space taken from the video
+  $('fsSide').style.width = narrow ? '100%' : sideW + 'px';
+  $('fsSide').style.bottom = narrow ? barH + 'px' : '0';
+  // the bar's height can change once the video narrows, so measure again after the width change
+  requestAnimationFrame(() => stage.style.setProperty('--bar-h', $('miniBar').offsetHeight + 'px'));
+  $('miniSearch').classList.toggle('on', open);
 }
-['mousemove', 'touchstart', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, wake, { passive: true }));
-// the video iframe swallows mouse moves, so the bar itself also listens
-$('miniBar').addEventListener('mouseenter', wake);
-function onFullChange() {
-  // keep the video exactly above the bar, however tall it wraps
-  stage.style.setProperty('--bar-h', $('miniBar').offsetHeight + 'px');
-  wake();
-}
+function onFullChange() { layoutFull(); }
 document.addEventListener('fullscreenchange', onFullChange);
 document.addEventListener('webkitfullscreenchange', onFullChange);
+new ResizeObserver(() => { if (isFull()) layoutFull(); }).observe(stage);
 new ResizeObserver(() => { if (isFull()) stage.style.setProperty('--bar-h', $('miniBar').offsetHeight + 'px'); }).observe($('miniBar'));
 
-// keyboard shortcuts (when not typing): space = pause, N = next, R = replay, F = full screen
+function toggleSide(forceOpen) {
+  if (forceOpen === true) stage.classList.remove('side-closed');
+  else stage.classList.toggle('side-closed');
+  layoutFull();
+  if (!stage.classList.contains('side-closed')) setTimeout(() => $('query').focus(), 50);
+}
+$('miniSearch').onclick = () => toggleSide();
+
+// keyboard shortcuts (when not typing): space = pause, N = next, R = replay, F = full screen,
+// "/" or Cmd/Ctrl+K = jump to search (like Spotlight)
 document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    if (isFull()) toggleSide(true); else $('query').focus();
+    return;
+  }
   if (e.target.tagName === 'INPUT') return;
+  if (e.key === '/') { e.preventDefault(); if (isFull()) toggleSide(true); else $('query').focus(); return; }
   if (e.key === 'f' || e.key === 'F') toggleFull();
-  if (e.key === 'Escape') stage.classList.remove('fake-full');
+  if (e.key === 'Escape' && stage.classList.contains('fake-full')) { stage.classList.remove('fake-full'); layoutFull(); }
   if (e.code === 'Space') { e.preventDefault(); $('pauseBtn').click(); }
   if (e.key === 'n' || e.key === 'N') $('nextBtn').click();
   if (e.key === 'r' || e.key === 'R') $('replayBtn').click();
@@ -557,7 +618,7 @@ $('saveKey').onclick = () => {
 // ---------- Auto-update ----------
 // Browsers can keep an old copy of this page for a while. Check for a newer version now and then:
 // reload straight away if nothing is playing, otherwise show a refresh banner (the queue is kept either way).
-const APP_VERSION = '2026-11-21-4';
+const APP_VERSION = '2026-11-21-5';
 async function checkForUpdate() {
   try {
     const r = await fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' });
