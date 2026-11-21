@@ -103,10 +103,11 @@
   .stage:fullscreen, .stage.fake-full { border-radius: 0; aspect-ratio: auto; }
   .stage.fake-full { position: fixed; inset: 0; z-index: 1000; }
   .stage:fullscreen .stage-overlay, .stage.fake-full .stage-overlay { display: flex; }
-  .stage:fullscreen #player, .stage.fake-full #player { bottom: var(--bar-h, 92px); height: auto; }
+  /* the video iframe won't stretch between top/bottom, so give it an explicit height above the bar */
+  .stage:fullscreen #player, .stage.fake-full #player { height: calc(100% - var(--bar-h, 92px)); }
   /* when nobody touches anything for a few seconds, hide the bar and let the video use the full screen */
   .stage.idle .stage-overlay { opacity: 0; pointer-events: none; }
-  .stage.idle #player { bottom: 0 !important; }
+  .stage.idle #player { height: 100% !important; }
   .stage.idle { cursor: none; }
 
   .update-bar { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; background: var(--panel-2); border-bottom: 2px solid var(--accent); font-size: 14px; }
@@ -556,7 +557,7 @@ $('saveKey').onclick = () => {
 // ---------- Auto-update ----------
 // Browsers can keep an old copy of this page for a while. Check for a newer version now and then:
 // reload straight away if nothing is playing, otherwise show a refresh banner (the queue is kept either way).
-const APP_VERSION = '2026-11-21-3';
+const APP_VERSION = '2026-11-21-4';
 async function checkForUpdate() {
   try {
     const r = await fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' });
