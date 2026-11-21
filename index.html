@@ -91,17 +91,23 @@
   .tabs button.active { background: var(--accent); border-color: var(--accent); }
 
   /* full screen stage */
-  .stage-overlay { display: none; position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 20px; background: linear-gradient(transparent, rgba(0,0,0,.85)); pointer-events: none; }
-  .stage-overlay .ov-now { font-size: 22px; font-weight: 600; }
+  /* mini player bar shown only in full screen */
+  .stage-overlay { display: none; position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 20px; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: rgba(18,18,18,.92); border-top: 2px solid var(--accent); transition: opacity .3s; }
+  .stage-overlay .ov-info { min-width: 0; flex: 1 1 260px; }
+  .stage-overlay .ov-now { font-size: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .stage-overlay .ov-now span { color: var(--accent); }
-  .stage-overlay .ov-next { color: var(--muted); font-size: 15px; margin-top: 2px; }
+  .stage-overlay .ov-next { color: var(--muted); font-size: 14px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini-controls { display: flex; gap: 8px; flex-shrink: 0; }
+  .mini-controls button { width: 52px; height: 52px; padding: 0; border-radius: 50%; font-size: 20px; display: grid; place-items: center; }
+  .mini-controls button.primary { width: 60px; height: 60px; font-size: 22px; }
   .stage:fullscreen, .stage.fake-full { border-radius: 0; aspect-ratio: auto; }
   .stage.fake-full { position: fixed; inset: 0; z-index: 1000; }
-  .stage:fullscreen .stage-overlay, .stage.fake-full .stage-overlay { display: block; }
-  .stage:fullscreen #player { bottom: 80px; height: auto; }
-  .stage.fake-full #player { bottom: 80px; height: auto; }
-  .exit-full { display: none; position: absolute; top: 12px; right: 12px; z-index: 2; }
-  .stage.fake-full .exit-full { display: block; }
+  .stage:fullscreen .stage-overlay, .stage.fake-full .stage-overlay { display: flex; }
+  .stage:fullscreen #player, .stage.fake-full #player { bottom: var(--bar-h, 92px); height: auto; }
+  /* when nobody touches anything for a few seconds, hide the bar and let the video use the full screen */
+  .stage.idle .stage-overlay { opacity: 0; pointer-events: none; }
+  .stage.idle #player { bottom: 0 !important; }
+  .stage.idle { cursor: none; }
 
   /* song suggestions */
   .suggest-wrap { position: relative; }
@@ -124,11 +130,18 @@
     <div class="stage" id="stage">
       <div id="player"></div>
       <div class="empty-stage" id="emptyStage"><div><b>Stage is open!</b>Add a song on the right to start singing.</div></div>
-      <div class="stage-overlay">
-        <div class="ov-now" id="ovNow"></div>
-        <div class="ov-next" id="ovNext"></div>
+      <div class="stage-overlay" id="miniBar">
+        <div class="ov-info">
+          <div class="ov-now" id="ovNow"></div>
+          <div class="ov-next" id="ovNext"></div>
+        </div>
+        <div class="mini-controls">
+          <button id="miniPause" title="Pause / Play">⏸</button>
+          <button id="miniReplay" title="Replay">↺</button>
+          <button id="miniNext" class="primary" title="Next singer">⏭</button>
+          <button id="exitFull" title="Exit full screen">✕</button>
+        </div>
       </div>
-      <button class="small exit-full" id="exitFull">✕ Exit full screen</button>
     </div>
 
     <div class="now">
@@ -155,7 +168,7 @@
         <button class="small" data-tab="link">Paste link</button>
       </div>
 
-      <label for="singer">Singer name</label>
+      <label for="singer">Singer name (optional)</label>
       <input id="singer" placeholder="e.g. Tita Baby" autocomplete="off">
 
       <div id="tab-search">
@@ -234,6 +247,9 @@ function render() {
   ['pauseBtn', 'replayBtn'].forEach(id => $(id).disabled = !current);
   $('nextBtn').disabled = !current && queue.length === 0;
   $('pauseBtn').textContent = isPaused ? '▶ Play' : '⏸ Pause';
+  $('miniPause').textContent = isPaused ? '▶' : '⏸';
+  $('miniPause').disabled = $('miniReplay').disabled = !current;
+  $('miniNext').disabled = !current && queue.length === 0;
   $('upNext').innerHTML = queue.length
     ? `Up next: <b>${esc(queue[0].singer)}</b> — ${esc(queue[0].title)}`
     : 'Up next: nobody yet — add a song!';
@@ -336,9 +352,33 @@ function toggleFull() {
   } else if (stage.requestFullscreen) stage.requestFullscreen().catch(() => stage.classList.add('fake-full'));
   else if (stage.webkitRequestFullscreen) stage.webkitRequestFullscreen();
   else stage.classList.add('fake-full');
+  setTimeout(onFullChange, 100); // the fallback mode fires no fullscreen event
 }
 $('fullBtn').onclick = toggleFull;
 $('exitFull').onclick = toggleFull;
+// mini player buttons do the same as the main ones
+$('miniPause').onclick = () => $('pauseBtn').click();
+$('miniReplay').onclick = () => $('replayBtn').click();
+$('miniNext').onclick = () => $('nextBtn').click();
+
+// Hide the mini player after 4s without mouse/touch while in full screen; any movement brings it back.
+let idleTimer = null;
+function wake() {
+  stage.classList.remove('idle');
+  clearTimeout(idleTimer);
+  if (isFull()) idleTimer = setTimeout(() => { if (isFull() && !isPaused) stage.classList.add('idle'); }, 4000);
+}
+['mousemove', 'touchstart', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, wake, { passive: true }));
+// the video iframe swallows mouse moves, so the bar itself also listens
+$('miniBar').addEventListener('mouseenter', wake);
+function onFullChange() {
+  // keep the video exactly above the bar, however tall it wraps
+  stage.style.setProperty('--bar-h', $('miniBar').offsetHeight + 'px');
+  wake();
+}
+document.addEventListener('fullscreenchange', onFullChange);
+document.addEventListener('webkitfullscreenchange', onFullChange);
+new ResizeObserver(() => { if (isFull()) stage.style.setProperty('--bar-h', $('miniBar').offsetHeight + 'px'); }).observe($('miniBar'));
 
 // keyboard shortcuts (when not typing): space = pause, N = next, R = replay, F = full screen
 document.addEventListener('keydown', (e) => {
@@ -351,10 +391,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------- Adding songs ----------
+// Singer name is optional: anyone can queue a song without filling it in.
 function getSinger() {
-  const s = $('singer').value.trim();
-  if (!s) { setErr('Enter the singer’s name first.'); $('singer').focus(); return null; }
-  return s;
+  return $('singer').value.trim() || 'Guest';
 }
 
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
