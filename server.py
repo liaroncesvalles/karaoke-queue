@@ -108,6 +108,8 @@ class Handler(SimpleHTTPRequestHandler):
             data = json.dumps(body).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
+            # lets the GitHub Pages copy of the site (liaroncesvalles.github.io) use this search
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)

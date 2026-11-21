@@ -338,10 +338,12 @@ function updateSearchHint() {
   $('searchHint').textContent = '“karaoke minus one” is added to your search automatically. Tap a result to queue it.';
 }
 
-// Search via our local server (no key needed); fall back to the YouTube API if a key is saved.
+// Search via our server (no key needed); fall back to the YouTube API if a key is saved.
+// On GitHub Pages there is no server, so search goes to the Render copy of the app.
+const SEARCH_SERVER = location.hostname.endsWith('github.io') ? 'https://karaoke-queue-wf91.onrender.com' : '';
 async function fetchResults(q) {
   try {
-    const r = await fetch('/api/search?q=' + encodeURIComponent(q));
+    const r = await fetch(SEARCH_SERVER + '/api/search?q=' + encodeURIComponent(q));
     const data = await r.json();
     if (data.error) throw new Error(data.error);
     return data.results;
@@ -365,6 +367,10 @@ async function search() {
   if (!q) { setErr('Type a song to search for.'); return; }
   $('results').innerHTML = '<div class="hint">Searching…</div>';
   $('searchBtn').disabled = true;
+  // the free search server sleeps when idle; let people know if it's waking up
+  const slow = setTimeout(() => {
+    $('results').innerHTML = '<div class="hint">Waking up the search server… the first search can take up to a minute.</div>';
+  }, 4000);
   try {
     const results = await fetchResults(`${q} karaoke minus one`);
     if (!results.length) { $('results').innerHTML = '<div class="hint">No results. Try different words.</div>'; return; }
@@ -377,7 +383,7 @@ async function search() {
   } catch (err) {
     $('results').innerHTML = '';
     setErr('Search failed: ' + err.message);
-  } finally { $('searchBtn').disabled = false; }
+  } finally { clearTimeout(slow); $('searchBtn').disabled = false; }
 }
 $('searchBtn').onclick = search;
 $('query').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
